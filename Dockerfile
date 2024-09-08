@@ -20,7 +20,7 @@ RUN apt-get update && \
 # RUN curl -fsSL https://bun.sh/install | bash -s -- --location /usr/local/bun && \
 #     ln -s /usr/local/bun/bin/bun /usr/local/bin/bun && \
 #     chmod +x /usr/local/bin/bun
-RUN npm install -g bun
+RUN npm install -g bun@1.1.25
 
 # Verify Bun installation
 RUN bun --version
@@ -33,6 +33,8 @@ RUN pnpm install --production
 
 # Copy the rest of the application files
 COPY . .
+COPY .env /usr/src/app
+
 
 # Ensure all files are owned by the node user
 RUN useradd -m node && chown -R node:node /usr/src/app
@@ -44,4 +46,5 @@ EXPOSE 3000
 USER node
 
 # Run the application using pnpm
-CMD ["pnpm", "run", "dev", "src/index.ts"]
+# CMD ["pnpm", "run", "dev", "src/index.ts"]
+CMD ["bun", "run", "src/index.ts"]
