@@ -6,9 +6,8 @@ import type { JwtVariables } from 'hono/jwt'
 import {streamSSE } from 'hono/streaming'
 import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
-
-
-
+import { Queue, Worker } from 'bullmq'
+import { scrapeName } from './scrape'
 
 // Create a single supabase client for interacting with your database
 const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL;
@@ -21,7 +20,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 type Variables = JwtVariables
 
 const app = new Hono<{ Variables: Variables }>()
-let id = 0;
+interface Job {
+  id: string
+  status: 'pending' | 'processing' | 'done'
+  progress: number
+}
+
+
 // Allow all origins
 app.use('/*', cors())
 app.use(logger())
@@ -56,8 +61,26 @@ app.get('/scrape/:url', async (c) => {
   return c.text('Scraping ' + URL)
 })
 
-app.get('/', async (c) => {
-  return c.text('Hello Hono!')
+app.get('/', async (c) =>
+   {
+  const TESTURL = "https://www.facebook.com/NintendoAmerica/posts/pfbid02XR9TzVnLaaREeDewGsfzQEB4UZYa354zobqx6rNyYqiP2Gvaquc6HTWYrw3sDR5fl"
+  let name: string | null = null;
+  try
+  {
+    name = await scrapeName(TESTURL);
+    if(!name)
+    {
+      throw new HTTPException(500, { message: 'Scraping failed' })
+    }
+  }
+  catch (error)
+  {
+    console.error('An error occurred:', error);
+    throw new HTTPException(500, { message: 'Scraping failed' })
+  }
+
+  
+  return c.text(name)
 })
 
 // Flow for scraping status SSE:
@@ -67,6 +90,7 @@ app.get('/', async (c) => {
 // 3. Otherwise it is being processsed, so update the job progress every X ms.
 // 4. Close the connection when job is done or on timeout.
 app.get('/sse', async (c) => {
+  let id = 0;
   return streamSSE(c, async (stream) => {
     let ended = false;
     while (true) {

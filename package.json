@@ -5,7 +5,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.3",
-    "hono": "^4.5.11"
+    "bullmq": "^5.12.14",
+    "hono": "^4.5.11",
+    "playwright": "^1.47.0"
   },
   "devDependencies": {
     "@types/bun": "latest"
