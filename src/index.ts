@@ -7,7 +7,7 @@ import {streamSSE } from 'hono/streaming'
 import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
 import { Queue, Worker } from 'bullmq'
-import { scrapeName } from './scrape'
+import { scrapeName, scrapeDate, scrapeImages } from './scrape'
 
 // Create a single supabase client for interacting with your database
 const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL;
@@ -64,23 +64,45 @@ app.get('/scrape/:url', async (c) => {
 app.get('/', async (c) =>
    {
   const TESTURL = "https://www.facebook.com/NintendoAmerica/posts/pfbid02XR9TzVnLaaREeDewGsfzQEB4UZYa354zobqx6rNyYqiP2Gvaquc6HTWYrw3sDR5fl"
-  let name: string | null = null;
+  
+  const promises =  
+  {
+    name: scrapeName(TESTURL), 
+    date: scrapeDate(TESTURL),
+    images: scrapeImages(TESTURL)
+  };
+  let resultMap = new Map<string, (string | null | (string| null)[])>()
+  
   try
   {
-    name = await scrapeName(TESTURL);
-    if(!name)
-    {
-      throw new HTTPException(500, { message: 'Scraping failed' })
-    }
+    await Promise.allSettled(Object.values(promises))  
+    .then(results => {
+      
+      Object.keys(promises).forEach((key, index) => {
+        if (results[index].status === 'fulfilled')
+        {
+          resultMap.set(key, results[index].value)
+        }
+        else
+        {
+          resultMap.set(key, null)
+        }
+      });
+
+      let noRejections: boolean = results.every((res) => res.status == 'fulfilled')
+      if(!noRejections)
+      {
+        throw new HTTPException(500, { message: 'Scraping failed' })
+      }
+    })
+
   }
   catch (error)
   {
     console.error('An error occurred:', error);
     throw new HTTPException(500, { message: 'Scraping failed' })
   }
-
-  
-  return c.text(name)
+  return c.text(JSON.stringify(Object.fromEntries(resultMap)))
 })
 
 // Flow for scraping status SSE:
@@ -108,4 +130,7 @@ app.get('/sse', async (c) => {
     }
   })
 })
-export default app
+export default { 
+  port: 3000, 
+  fetch: app.fetch, 
+} 
