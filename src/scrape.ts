@@ -3,6 +3,13 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import { Browser, Page } from 'playwright';
 import { HTTPException } from 'hono/http-exception'
 
+interface gotoOptions {
+  referer?: string;
+  timeout?: number;
+  waitUntil?: "load" | "domcontentloaded" | "networkidle" | "commit";
+}
+
+const gotoOptions: gotoOptions = { timeout: 10000, waitUntil: 'load' }
 
 export async function scrapeName(url: string): Promise<string | null>
 {
@@ -12,7 +19,7 @@ export async function scrapeName(url: string): Promise<string | null>
 
     try {
         let startTime = Date.now();
-        await page.goto(url, {timeout: 10000, waitUntil: 'domcontentloaded'});
+        await page.goto(url, gotoOptions);
         console.log(`Name goto took: ${Date.now() - startTime}ms`);
 
         const nameElement = await page.locator('[property="og:title"]').first();
@@ -28,6 +35,37 @@ export async function scrapeName(url: string): Promise<string | null>
     }
 
 }
+
+export async function scrapePostText(url: string): Promise<string[] | null>
+{
+    chromium.use(StealthPlugin())
+    const browser: Browser = await chromium.launch();
+    const page: Page = await browser.newPage();
+
+    try {
+        let startTime = Date.now();
+        await page.goto(url, gotoOptions);
+        console.log(`Post text goto took: ${Date.now() - startTime}ms`);
+      // Consider data-ad-preview="message" can have more than one element for reposts/reply posts
+        const postElement = await page.locator('[data-ad-preview="message"]').first();
+        const contentSpan = await postElement.locator('div > div > span').first();
+        const textBlockList = await contentSpan.locator('> div').all();
+        console.log(textBlockList.length);
+        let textContentList:string[] = [];
+        for (const textBlock of textBlockList) {
+            const text = await textBlock.innerText();
+            textContentList.push(text);
+        }
+        return textContentList;
+    } catch (error) {
+        await browser.close();
+        // console.error('An error occurred:', error);
+        return null;
+    } finally {
+        await browser.close();
+    }
+}
+
 
 
 export async function scrapeDate(url: string): Promise<string | null> {
@@ -108,4 +146,68 @@ export async function scrapeImages(url: string): Promise<(string | null)[]>
     await browser.close();
 
     return srcList;
+}
+
+export async function scrapeLikeCount()
+{
+  chromium.use(StealthPlugin())
+  const browser: Browser = await chromium.launch();
+  const page: Page = await browser.newPage();
+}
+
+export async function scrapeCommentCount()
+{
+  chromium.use(StealthPlugin())
+  const browser: Browser = await chromium.launch();
+  const page: Page = await browser.newPage();
+}
+
+export async function scrapeShareCount()
+{
+  chromium.use(StealthPlugin())
+  const browser: Browser = await chromium.launch();
+  const page: Page = await browser.newPage();
+}
+
+export async function getScript(URL: string): Promise<string[] | null>
+{
+  chromium.use(StealthPlugin())
+  const browser: Browser = await chromium.launch();
+  const page: Page = await browser.newPage();
+  await page.goto(URL);
+
+  // await Bun.write("output.html", await page.content())
+  
+  let result: string[] = [];
+  // Evaluate the script tags on the page to find the desired key-value pairs
+  const reactions = await page.evaluate(() => {
+    const scripts = Array.from(document.querySelectorAll('script'));
+
+    scripts.forEach(async (script) => {
+      const text = script.textContent;
+      if (text)
+      {
+        await Bun.write("output.html", text);
+      }
+      // // Parse JSON strings found within the script tag text
+      // const matches = text?.match(/{"i18n_reaction_count":"\d+","i18n_reaction_count_plural":"\d+","reaction_type":"\w+"}/g);
+      // if (matches) {
+      //   matches.forEach(match => {
+      //     try {
+      //       const reactionData = JSON.parse(match);
+      //       result.push(reactionData);
+      //     } catch (e) {
+      //       console.error('Error parsing JSON:', e);
+      //     }
+      //   });
+      // }
+      if (text!==null) {
+        console.log(text);
+      }
+    });
+  });
+
+  await browser.close();
+  console.log(result);
+  return result;
 }

@@ -7,7 +7,7 @@ import {streamSSE } from 'hono/streaming'
 import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
 import { Queue, Worker } from 'bullmq'
-import { scrapeName, scrapeDate, scrapeImages } from './scrape'
+import { scrapeName, scrapeDate, scrapeImages, getScript, scrapePostText} from './scrape'
 
 // Create a single supabase client for interacting with your database
 const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL;
@@ -51,14 +51,17 @@ app.use(
 // 3. Scrape data accordingly
 // 4. Record API transaction and stats in table
 // 5. Return scraped data to user
-app.get('/scrape/:url', async (c) => {
-  let URL: string | undefined = c.req.param('url')
+app.get('/scrape', async (c) => {
+  // let URL: string | undefined = c.req.param('url')
+  const URL = "https://www.facebook.com/NintendoAmerica/posts/pfbid02XR9TzVnLaaREeDewGsfzQEB4UZYa354zobqx6rNyYqiP2Gvaquc6HTWYrw3sDR5fl";
   if(!URL)
   {
     throw new HTTPException(400, { message: 'Bad URL parameter.' })
   }
-  let parsedID : string | null = "parsedID"
-  return c.text('Scraping ' + URL)
+  console.log(URL)
+  // await getScript(URL);
+  let ret = await scrapePostText(URL);
+  return c.text(ret?.toString() ? ret.toString() : "No text found");
 })
 
 app.get('/', async (c) =>
