@@ -59,7 +59,7 @@ app.get('/scrape', async (c) => {
     throw new HTTPException(400, { message: 'Bad URL parameter.' })
   }
   console.log(URL)
-  // await getScript(URL);
+  await getScript(URL);
   let ret = await scrapePostText(URL);
   return c.text(ret?.toString() ? ret.toString() : "No text found");
 })

@@ -1,6 +1,6 @@
 import { chromium } from 'playwright-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
-import { Browser, Page } from 'playwright';
+import { Browser, ElementHandle, Page } from 'playwright';
 import { HTTPException } from 'hono/http-exception'
 
 interface gotoOptions {
@@ -175,39 +175,59 @@ export async function getScript(URL: string): Promise<string[] | null>
   const browser: Browser = await chromium.launch();
   const page: Page = await browser.newPage();
   await page.goto(URL);
+  const scriptElementHandles = await page.$$("script");
+  const scriptTexts: string[] = [];
+  console.log(scriptElementHandles.length);
+  let txt = "";
 
+  let largestDataContentLen: [(null | ElementHandle), number] = [null, 0];
+  for (const scriptHandle of scriptElementHandles) {
+    let dataContentLen = await scriptHandle.getAttribute("data-content-len");
+    if (dataContentLen &&  parseInt(dataContentLen) > largestDataContentLen[1])
+    {
+      largestDataContentLen[0] = scriptHandle;
+      largestDataContentLen[1] = parseInt(dataContentLen);
+    }
+    let scriptText = await largestDataContentLen[0]?.textContent();
+    Bun.write("output.html", scriptText ? scriptText : "");
+    // const text = await scriptHandle.evaluate((node) => node.textContent);
+    // if (text) {
+    //   scriptTexts.push(text);
+    //   txt+=(text+"\n");
+    // }
+  }
+  Bun.write("output.html", txt);
+  return scriptTexts;
   // await Bun.write("output.html", await page.content())
   
-  let result: string[] = [];
-  // Evaluate the script tags on the page to find the desired key-value pairs
-  const reactions = await page.evaluate(() => {
-    const scripts = Array.from(document.querySelectorAll('script'));
+  // let result: string[] = [];
+  // // Evaluate the script tags on the page to find the desired key-value pairs
+  // const reactions = await page.evaluate(() => {
+  //   const scripts = Array.from(document.querySelectorAll('script'));
 
-    scripts.forEach(async (script) => {
-      const text = script.textContent;
-      if (text)
-      {
-        await Bun.write("output.html", text);
-      }
-      // // Parse JSON strings found within the script tag text
-      // const matches = text?.match(/{"i18n_reaction_count":"\d+","i18n_reaction_count_plural":"\d+","reaction_type":"\w+"}/g);
-      // if (matches) {
-      //   matches.forEach(match => {
-      //     try {
-      //       const reactionData = JSON.parse(match);
-      //       result.push(reactionData);
-      //     } catch (e) {
-      //       console.error('Error parsing JSON:', e);
-      //     }
-      //   });
-      // }
-      if (text!==null) {
-        console.log(text);
-      }
-    });
-  });
+  //   scripts.forEach(async (script) => {
+  //     const text = script.textContent;
+  //     if (text)
+  //     {
+  //       await Bun.write("output.html", text);
+  //     }
+  //     // // Parse JSON strings found within the script tag text
+  //     // const matches = text?.match(/{"i18n_reaction_count":"\d+","i18n_reaction_count_plural":"\d+","reaction_type":"\w+"}/g);
+  //     // if (matches) {
+  //     //   matches.forEach(match => {
+  //     //     try {
+  //     //       const reactionData = JSON.parse(match);
+  //     //       result.push(reactionData);
+  //     //     } catch (e) {
+  //     //       console.error('Error parsing JSON:', e);
+  //     //     }
+  //     //   });
+  //     // }
+  //     if (text!==null) {
+  //       console.log(text);
+  //     }
+  //   });
+  // });
 
   await browser.close();
-  console.log(result);
-  return result;
 }
