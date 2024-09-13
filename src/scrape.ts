@@ -179,6 +179,7 @@ export async function getScript(URL: string): Promise<string[] | null>
   const scriptTexts: string[] = [];
   console.log(scriptElementHandles.length);
   let txt = "";
+  let scriptText = null;
 
   let largestDataContentLen: [(null | ElementHandle), number] = [null, 0];
   for (const scriptHandle of scriptElementHandles) {
@@ -188,15 +189,16 @@ export async function getScript(URL: string): Promise<string[] | null>
       largestDataContentLen[0] = scriptHandle;
       largestDataContentLen[1] = parseInt(dataContentLen);
     }
-    let scriptText = await largestDataContentLen[0]?.textContent();
-    Bun.write("output.html", scriptText ? scriptText : "");
+    scriptText = await largestDataContentLen[0]?.textContent();
+    // console.log(scriptText)
     // const text = await scriptHandle.evaluate((node) => node.textContent);
     // if (text) {
     //   scriptTexts.push(text);
     //   txt+=(text+"\n");
     // }
   }
-  Bun.write("output.html", txt);
+  // Bun.write("output.html", txt);
+  Bun.write("output.html", scriptText ? scriptText : "");
   return scriptTexts;
   // await Bun.write("output.html", await page.content())
   
