@@ -1,8 +1,6 @@
 import { chromium } from 'playwright-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import { Browser, ElementHandle, Page } from 'playwright';
-import { HTTPException } from 'hono/http-exception';
-import { deepMatch } from 'bun';
 
 interface gotoOptions {
   referer?: string;
@@ -136,7 +134,6 @@ export async function scrapeImages(url: string): Promise<(string | null)[]>
 
     //Locator will return null/undefined if there is not image
     const imgElements = await page.locator(imgSelector).all();
-    // const imgSrc = img.map(async (img) => {return (await img.getAttribute("src"))});
     const srcList: (string | null)[] = [];
 
     for (const img of imgElements) {
@@ -149,35 +146,26 @@ export async function scrapeImages(url: string): Promise<(string | null)[]>
     return srcList;
 }
 
-export async function scrapeLikeCount()
+export function scrapeLikeCount(scriptString: string): number | null
 {
-  chromium.use(StealthPlugin())
-  const browser: Browser = await chromium.launch();
-  const page: Page = await browser.newPage();
+  const likeCountRegex: RegExp = /"reaction_count":{"count":(\d+)}/g;
+  let likeCount = likeCountRegex.exec(scriptString);
+  return likeCount ? Number(likeCount[1]) : null;
+
 }
 
-export function scrapeCommentCount(scriptText : string): string | null
+export function scrapeCommentCount(scriptString : string): number | null
 {
-  // chromium.use(StealthPlugin())
-  // const browser: Browser = await chromium.launch();
-  // const page: Page = await browser.newPage();
-  const commentCountRegx: RegExp = /{"comments":{"total_count":(\d+)}}/g;
-  let commentCount = scriptText.match(commentCountRegx);
-  if (commentCount)
-  {
-    for (const count of commentCount)
-    {
-      console.log(count);
-    }
-  }
-  return commentCount ? commentCount[1] : null;
+  const commentCountRegex: RegExp = /{"comments":{"total_count":(\d+)}}/g;
+  let commentCount = commentCountRegex.exec(scriptString);
+  return commentCount ? Number(commentCount[1]) : null;
 }
 
-export async function scrapeShareCount()
+export function scrapeShareCount(scriptString: string): number | null
 {
-  chromium.use(StealthPlugin())
-  const browser: Browser = await chromium.launch();
-  const page: Page = await browser.newPage();
+  const commentCountRegex: RegExp = /i18n_share_count":"(\d+)"/g;
+  let shareCount = commentCountRegex.exec(scriptString);
+  return shareCount ? Number(shareCount[1]) : null;
 }
 
 export async function getScript(url: string): Promise<string[] | null>
@@ -212,68 +200,37 @@ export async function getScript(url: string): Promise<string[] | null>
     //   txt+=(text+"\n");
     // }
   }
-  // Bun.write("output.html", txt);
   // Bun.write("output.html", scriptText ? scriptText : "");
   if (scriptText)
   {
     scriptTexts.push(scriptText);
   }
-  return scriptTexts;
-  // await Bun.write("output.html", await page.content())
-  
-  // let result: string[] = [];
-  // // Evaluate the script tags on the page to find the desired key-value pairs
-  // const reactions = await page.evaluate(() => {
-  //   const scripts = Array.from(document.querySelectorAll('script'));
-
-  //   scripts.forEach(async (script) => {
-  //     const text = script.textContent;
-  //     if (text)
-  //     {
-  //       await Bun.write("output.html", text);
-  //     }
-  //     // // Parse JSON strings found within the script tag text
-  //     // const matches = text?.match(/{"i18n_reaction_count":"\d+","i18n_reaction_count_plural":"\d+","reaction_type":"\w+"}/g);
-  //     // if (matches) {
-  //     //   matches.forEach(match => {
-  //     //     try {
-  //     //       const reactionData = JSON.parse(match);
-  //     //       result.push(reactionData);
-  //     //     } catch (e) {
-  //     //       console.error('Error parsing JSON:', e);
-  //     //     }
-  //     //   });
-  //     // }
-  //     if (text!==null) {
-  //       console.log(text);
-  //     }
-  //   });
-  // });
-
   await browser.close();
+  return scriptTexts;
+
 }
 
-export async function scrapeReactions(url: string): Promise<string[]>
+interface Reactions
 {
-  // chromium.use(StealthPlugin())
-  // const browser: Browser = await chromium.launch();
-  // const page: Page = await browser.newPage();
-  
-  // let startTime = Date.now();
-  // await page.goto(url, {timeout: 10000, waitUntil: 'domcontentloaded'});
-  // console.log(`Reactions goto took: ${Date.now() - startTime}ms`);
-  let res: string[] = [];
+  likes: number;
+  shares: number;
+  comments: number;
+}
+
+export async function scrapeReactions(url: string): Promise<Reactions>
+{
+  let res: Reactions = {likes: 0, shares: 0, comments: 0};
   const bigScripts: (string[] | null) = await getScript(url);
   bigScripts?.forEach((script) => {
     if(script)
     {
       const cc = scrapeCommentCount(script);
-      if (cc)
-      {
-        res.push(cc);
-      }
+      const sc = scrapeShareCount(script);
+      const lc = scrapeLikeCount(script);
+      res.comments = cc ? cc : 0;
+      res.shares = sc ? sc : 0;
+      res.likes = lc ? lc : 0;
     }
   });
-  console.log(`Scraped ${res.length} comment counts out of ${bigScripts?.length} scripts`);
   return res;
 }
