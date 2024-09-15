@@ -7,7 +7,7 @@ import {streamSSE } from 'hono/streaming'
 import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
 import { Queue, Worker } from 'bullmq'
-import { scrapeName, scrapeDate, scrapeImages, getScript, scrapePostText} from './scrape'
+import { scrapeName, scrapeDate, scrapeImages, getScript, scrapePostText, scrapeReactions} from './scrape'
 
 // Create a single supabase client for interacting with your database
 const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL;
@@ -60,8 +60,10 @@ app.get('/scrape', async (c) => {
   }
   console.log(URL)
   await getScript(URL);
-  let ret = await scrapePostText(URL);
-  return c.text(ret?.toString() ? ret.toString() : "No text found");
+  let res = await scrapeReactions(URL);
+  return c.text(res?.toString() ? res.toString() : "No text found");
+  // let ret = await scrapePostText(URL);
+  // return c.text(ret?.toString() ? ret.toString() : "No text found");
 })
 
 app.get('/', async (c) =>

@@ -1,7 +1,8 @@
 import { chromium } from 'playwright-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import { Browser, ElementHandle, Page } from 'playwright';
-import { HTTPException } from 'hono/http-exception'
+import { HTTPException } from 'hono/http-exception';
+import { deepMatch } from 'bun';
 
 interface gotoOptions {
   referer?: string;
@@ -155,11 +156,21 @@ export async function scrapeLikeCount()
   const page: Page = await browser.newPage();
 }
 
-export async function scrapeCommentCount()
+export function scrapeCommentCount(scriptText : string): string | null
 {
-  chromium.use(StealthPlugin())
-  const browser: Browser = await chromium.launch();
-  const page: Page = await browser.newPage();
+  // chromium.use(StealthPlugin())
+  // const browser: Browser = await chromium.launch();
+  // const page: Page = await browser.newPage();
+  const commentCountRegx: RegExp = /{"comments":{"total_count":(\d+)}}/g;
+  let commentCount = scriptText.match(commentCountRegx);
+  if (commentCount)
+  {
+    for (const count of commentCount)
+    {
+      console.log(count);
+    }
+  }
+  return commentCount ? commentCount[1] : null;
 }
 
 export async function scrapeShareCount()
@@ -169,12 +180,16 @@ export async function scrapeShareCount()
   const page: Page = await browser.newPage();
 }
 
-export async function getScript(URL: string): Promise<string[] | null>
+export async function getScript(url: string): Promise<string[] | null>
 {
   chromium.use(StealthPlugin())
   const browser: Browser = await chromium.launch();
   const page: Page = await browser.newPage();
-  await page.goto(URL);
+  
+  let startTime = Date.now();
+  await page.goto(url, {timeout: 10000, waitUntil: 'domcontentloaded'});
+  console.log(`Script goto took: ${Date.now() - startTime}ms`);
+
   const scriptElementHandles = await page.$$("script");
   const scriptTexts: string[] = [];
   console.log(scriptElementHandles.length);
@@ -198,7 +213,11 @@ export async function getScript(URL: string): Promise<string[] | null>
     // }
   }
   // Bun.write("output.html", txt);
-  Bun.write("output.html", scriptText ? scriptText : "");
+  // Bun.write("output.html", scriptText ? scriptText : "");
+  if (scriptText)
+  {
+    scriptTexts.push(scriptText);
+  }
   return scriptTexts;
   // await Bun.write("output.html", await page.content())
   
@@ -232,4 +251,29 @@ export async function getScript(URL: string): Promise<string[] | null>
   // });
 
   await browser.close();
+}
+
+export async function scrapeReactions(url: string): Promise<string[]>
+{
+  // chromium.use(StealthPlugin())
+  // const browser: Browser = await chromium.launch();
+  // const page: Page = await browser.newPage();
+  
+  // let startTime = Date.now();
+  // await page.goto(url, {timeout: 10000, waitUntil: 'domcontentloaded'});
+  // console.log(`Reactions goto took: ${Date.now() - startTime}ms`);
+  let res: string[] = [];
+  const bigScripts: (string[] | null) = await getScript(url);
+  bigScripts?.forEach((script) => {
+    if(script)
+    {
+      const cc = scrapeCommentCount(script);
+      if (cc)
+      {
+        res.push(cc);
+      }
+    }
+  });
+  console.log(`Scraped ${res.length} comment counts out of ${bigScripts?.length} scripts`);
+  return res;
 }
