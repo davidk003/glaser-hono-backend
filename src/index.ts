@@ -82,7 +82,7 @@ app.get('/', async (c) =>
   const promises =  
   {
     name: scrapeName(TESTURL), 
-    date: scrapeDate(TESTURL),
+    // date: scrapeDate(TESTURL),
     images: scrapeImages(TESTURL),
     postText: scrapePostText(TESTURL),
   };
@@ -132,7 +132,7 @@ app.get('/', async (c) =>
     console.error('An error occurred:', error);
     throw new HTTPException(500, { message: 'Scraping failed' })
   }
-  return c.text(JSON.stringify(Object.fromEntries(resultMap)))
+  return c.json(Object.fromEntries(resultMap));
 })
 
 // Flow for scraping status SSE:

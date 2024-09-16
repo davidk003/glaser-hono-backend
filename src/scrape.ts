@@ -199,7 +199,7 @@ export async function getScript(url: string): Promise<string[] | null>
     //   txt+=(text+"\n");
     // }
   }
-  // Bun.write("output.html", scriptText ? scriptText : "");
+  Bun.write("output.html", await page.content() ? await page.content() : "");
   if (scriptText)
   {
     scriptTexts.push(scriptText);
@@ -239,4 +239,18 @@ export function scrapeTimeStamp(scriptString: string): number | null
   const timestampRegex: RegExp = /"creation_time":(\d+),/g;
   let timestamp = timestampRegex.exec(scriptString);
   return timestamp ? Number(timestamp[1]) : null;
+}
+
+
+export async function initializeBrowser(url: string): Promise<[Page, Browser]>
+{
+  chromium.use(StealthPlugin())
+  const browser: Browser = await chromium.launch();
+  const page: Page = await browser.newPage();
+  
+  let startTime = Date.now();
+  await page.goto(url, gotoOptions);
+  console.log(`Page goto took: ${Date.now() - startTime}ms`);
+
+  return [page, browser];
 }
