@@ -74,7 +74,7 @@ export async function scrapeDate(url: string): Promise<string | null> {
   
     try {
         let startTime = Date.now();
-        await page.goto(url, {timeout: 10000, waitUntil: 'domcontentloaded'});
+        await page.goto(url, gotoOptions);
         console.log(`Date goto took: ${Date.now() - startTime}ms`);
 
         const parentElement = (await page.locator('[aria-labelledby]').all())[1];
@@ -129,7 +129,7 @@ export async function scrapeImages(url: string): Promise<(string | null)[]>
     const page: Page = await browser.newPage();
     chromium.use(StealthPlugin())
     let startTime = Date.now();
-    await page.goto(url, {timeout: 10000, waitUntil: 'domcontentloaded'});
+    await page.goto(url, gotoOptions);
     console.log(`Image goto took: ${Date.now() - startTime}ms`);
 
     //Locator will return null/undefined if there is not image
@@ -151,7 +151,6 @@ export function scrapeLikeCount(scriptString: string): number | null
   const likeCountRegex: RegExp = /"reaction_count":{"count":(\d+)}/g;
   let likeCount = likeCountRegex.exec(scriptString);
   return likeCount ? Number(likeCount[1]) : null;
-
 }
 
 export function scrapeCommentCount(scriptString : string): number | null
@@ -163,7 +162,7 @@ export function scrapeCommentCount(scriptString : string): number | null
 
 export function scrapeShareCount(scriptString: string): number | null
 {
-  const commentCountRegex: RegExp = /i18n_share_count":"(\d+)"/g;
+  const commentCountRegex: RegExp = /"share_count":{"count":(\d+),/g;
   let shareCount = commentCountRegex.exec(scriptString);
   return shareCount ? Number(shareCount[1]) : null;
 }
@@ -175,7 +174,7 @@ export async function getScript(url: string): Promise<string[] | null>
   const page: Page = await browser.newPage();
   
   let startTime = Date.now();
-  await page.goto(url, {timeout: 10000, waitUntil: 'domcontentloaded'});
+  await page.goto(url, gotoOptions);
   console.log(`Script goto took: ${Date.now() - startTime}ms`);
 
   const scriptElementHandles = await page.$$("script");
@@ -233,4 +232,11 @@ export async function scrapeReactions(url: string): Promise<Reactions>
     }
   });
   return res;
+}
+
+export function scrapeTimeStamp(scriptString: string): number | null
+{
+  const timestampRegex: RegExp = /"creation_time":(\d+),/g;
+  let timestamp = timestampRegex.exec(scriptString);
+  return timestamp ? Number(timestamp[1]) : null;
 }
