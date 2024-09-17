@@ -1,6 +1,8 @@
 import { chromium } from 'playwright-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import { Browser, ElementHandle, Page } from 'playwright';
+import { HTTPException } from 'hono/http-exception'
+
 
 interface gotoOptions {
   referer?: string;
@@ -12,26 +14,26 @@ const gotoOptions: gotoOptions = { timeout: 10000, waitUntil: 'load' }
 
 export async function scrapeName(url: string): Promise<string | null>
 {
-    chromium.use(StealthPlugin())
-    const browser: Browser = await chromium.launch();
-    const page: Page = await browser.newPage();
+  chromium.use(StealthPlugin())
+  const browser: Browser = await chromium.launch();
+  const page: Page = await browser.newPage();
 
-    try {
-        let startTime = Date.now();
-        await page.goto(url, gotoOptions);
-        console.log(`Name goto took: ${Date.now() - startTime}ms`);
+  try {
+      let startTime = Date.now();
+      await page.goto(url, gotoOptions);
+      console.log(`Name goto took: ${Date.now() - startTime}ms`);
 
-        const nameElement = await page.locator('[property="og:title"]').first();
-        const actualName = await nameElement.getAttribute('content');
+      const nameElement = await page.locator('[property="og:title"]').first();
+      const actualName = await nameElement.getAttribute('content');
 
-        return actualName;
-    } catch (error) {
-        await browser.close();
-        // console.error('An error occurred:', error);
-        return null;
-    } finally {
-        await browser.close();
-    }
+      return actualName;
+  } catch (error) {
+      await browser.close();
+      // console.error('An error occurred:', error);
+      return null;
+  } finally {
+      await browser.close();
+  }
 
 }
 
@@ -49,7 +51,7 @@ export async function scrapePostText(url: string): Promise<string[] | null>
         const postElement = await page.locator('[data-ad-preview="message"]').first();
         const contentSpan = await postElement.locator('div > div > span').first();
         const textBlockList = await contentSpan.locator('> div').all();
-        console.log(textBlockList.length);
+        // console.log(textBlockList.length);
         let textContentList:string[] = [];
         for (const textBlock of textBlockList) {
             const text = await textBlock.innerText();
@@ -199,7 +201,7 @@ export async function getScript(url: string): Promise<string[] | null>
     //   txt+=(text+"\n");
     // }
   }
-  Bun.write("output.html", await page.content() ? await page.content() : "");
+  // Bun.write("output.html", await page.content() ? await page.content() : "");
   if (scriptText)
   {
     scriptTexts.push(scriptText);
@@ -234,6 +236,19 @@ export async function scrapeReactions(url: string): Promise<Reactions>
   return res;
 }
 
+function scrapeReactionsbyString(scriptString: string): Reactions
+{
+  let likeCount = scrapeLikeCount(scriptString);
+  let commentCount = scrapeCommentCount(scriptString);
+  let shareCount = scrapeShareCount(scriptString);
+
+  return {
+    likes: likeCount ? likeCount : 0,
+    comments: commentCount ? commentCount : 0,
+    shares: shareCount ? shareCount : 0
+  }
+}
+
 export function scrapeTimeStamp(scriptString: string): number | null
 {
   const timestampRegex: RegExp = /"creation_time":(\d+),/g;
@@ -242,7 +257,7 @@ export function scrapeTimeStamp(scriptString: string): number | null
 }
 
 
-export async function initializeBrowser(url: string): Promise<[Page, Browser]>
+async function initializeBrowser(url: string): Promise<[Page, Browser]>
 {
   chromium.use(StealthPlugin())
   const browser: Browser = await chromium.launch();
@@ -253,4 +268,162 @@ export async function initializeBrowser(url: string): Promise<[Page, Browser]>
   console.log(`Page goto took: ${Date.now() - startTime}ms`);
 
   return [page, browser];
+}
+
+async function scrapeImageWithBrowser(page: Page): Promise<string[] | null>
+{
+  const imgSelector = `div > img[alt]`;
+  try
+  {
+    const imgElements = await page.locator(imgSelector).all();
+    const srcList: string[] = [];
+
+    for (const img of imgElements)
+    {
+      const src = await img.getAttribute("src");
+      if (src)
+      {
+        srcList.push(src);
+      }
+    }
+    return srcList;
+  }
+  catch(error)
+  {
+    return null;
+  }
+}
+
+async function scrapePostTextWithBrowser(page: Page): Promise<string[] | null>
+{
+  try
+  {
+    const postElement = await page.locator('[data-ad-preview="message"]').first();
+    const contentSpan = await postElement.locator('div > div > span').first();
+    const textBlockList = await contentSpan.locator('> div').all();
+    let textContentList:string[] = [];
+    for (const textBlock of textBlockList) {
+        const text = await textBlock.innerText();
+        textContentList.push(text);
+    }
+    return textContentList;
+  }
+  catch(error)
+  {
+    return null;
+  }
+}
+
+async function scrapeNameWithBrowser(page: Page): Promise<string | null>
+{
+  try
+  {
+    const nameElement = await page.locator('[property="og:title"]').first();
+    const actualName = await nameElement.getAttribute('content');
+    return actualName;
+  }
+  catch (error) {
+    return null;
+  }
+}
+
+async function scrapeScriptTextWithBrowser(page: Page): Promise<string[] | null>
+{
+  const scriptElementHandles = await page.$$("script");
+  const scriptTexts: string[] = [];
+  // console.log(scriptElementHandles.length);
+  let txt = "";
+  let scriptText = null;
+
+  let largestDataContentLen: [(null | ElementHandle), number] = [null, 0];
+  for (const scriptHandle of scriptElementHandles) {
+    let dataContentLen = await scriptHandle.getAttribute("data-content-len");
+    if (dataContentLen &&  parseInt(dataContentLen) > largestDataContentLen[1])
+    {
+      largestDataContentLen[0] = scriptHandle;
+      largestDataContentLen[1] = parseInt(dataContentLen);
+    }
+    scriptText = await largestDataContentLen[0]?.textContent();
+    // console.log(scriptText)
+    // const text = await scriptHandle.evaluate((node) => node.textContent);
+    // if (text) {
+    //   scriptTexts.push(text);
+    //   txt+=(text+"\n");
+    // }
+  }
+  // Bun.write("output.html", await page.content() ? await page.content() : "");
+  if (scriptText)
+  {
+    scriptTexts.push(scriptText);
+  }
+  return scriptTexts;
+}
+
+export async function scrapePostAllAtOnce(url: string)
+{
+  let retries = 0;
+  let [page, browser]: [(Page | null), (Browser | null)] = [null, null];
+  while(retries < 3 && (!page && !browser))
+  {
+    try
+    {
+      [page, browser] = await initializeBrowser(url);
+    }
+    catch(error)
+    {
+      console.log(`Failed to initialize browser. Retrying... [try #${retries}]`);
+      retries++;
+    }
+  }
+  if(!page || !browser)
+  {
+    throw new Error("Failed to initialize browser");
+  }
+  const scriptText = scrapeScriptTextWithBrowser(page);
+  const promises =  
+  {
+    name: scrapeNameWithBrowser(page),
+    postText: scrapePostTextWithBrowser(page),
+    images: scrapeImageWithBrowser(page),
+  };
+  let resultMap = new Map<string, string | null | string[] | number | Reactions>()
+  await Promise.allSettled(Object.values(promises))
+  .then(async (results) => {
+    Object.keys(promises).forEach((key, index) => {
+      if (results[index].status === 'fulfilled')
+      {
+        resultMap.set(key, results[index].value);
+      } 
+      else
+      {
+        resultMap.set(key, null);
+      }
+    });
+
+    let noRejections: boolean = results.every((res) => res.status == 'fulfilled')
+    if(!noRejections)
+    {
+      throw new HTTPException(500, { message: 'Scraping failed' })
+    }
+  });
+
+  let sc = await scriptText;
+  if (sc)
+  {
+    let reactions: Reactions = scrapeReactionsbyString(sc[0]);
+    let timestamp = null;
+    if (sc.length >= 1) {
+      timestamp = scrapeTimeStamp(sc[0]);
+    } else {
+      throw new HTTPException(500, { message: `Invalid scriptText for scraping reaction sc type is: ${typeof sc} sc length is: ${sc?.length}` });
+    }
+    if (reactions) {
+      resultMap.set('reactions', reactions);
+    }
+    if (timestamp) {
+      resultMap.set('timestamp', timestamp);
+    }
+  }
+
+  return (Object.fromEntries(resultMap));
 }

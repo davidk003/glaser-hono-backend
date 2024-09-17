@@ -7,7 +7,7 @@ import {streamSSE } from 'hono/streaming'
 import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
 import { Queue, Worker } from 'bullmq'
-import { scrapeName, scrapeDate, scrapeImages, getScript, scrapePostText, scrapeReactions, scrapeTimeStamp} from './scrape'
+import { scrapeName, scrapeDate, scrapeImages, getScript, scrapePostText, scrapeReactions, scrapeTimeStamp, scrapePostAllAtOnce} from './scrape'
 
 // Create a single supabase client for interacting with your database
 const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL;
@@ -38,12 +38,12 @@ interface Reactions
 app.use('/*', cors())
 app.use(logger())
 // Authenticate with a bearer token
-app.use(
-  '/*',
-  jwt({
-    secret: JWT_SECRET,
-  })
-)
+// app.use(
+//   '/*',
+//   jwt({
+//     secret: JWT_SECRET,
+//   })
+// )
 // Setup SSE headers
 // app.use('/sse', async (c, next) => {
 //   c.header('Content-Type', 'text/event-stream');
@@ -96,7 +96,7 @@ app.get('/', async (c) =>
         if (results[index].status === 'fulfilled')
         {
           resultMap.set(key, results[index].value)
-        }
+        } 
         else
         {
           resultMap.set(key, null)
@@ -160,6 +160,18 @@ app.get('/sse', async (c) => {
     }
   })
 })
+
+app.get('/getPost/:url', async (c) => {
+  let URL: string = c.req.param('url')
+  //URL VALIDATOR HERE
+  let res = await scrapePostAllAtOnce(URL);
+  return c.json(res);
+});
+
+
+
+
+
 export default { 
   port: 3000, 
   fetch: app.fetch, 
