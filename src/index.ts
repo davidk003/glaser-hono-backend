@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { serve } from '@hono/node-server'
 import { decode, jwt, sign, verify } from 'hono/jwt'
 import { cors } from 'hono/cors'
 import { createClient } from '@supabase/supabase-js'
@@ -7,7 +8,10 @@ import {streamSSE } from 'hono/streaming'
 import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
 import { Queue, Worker } from 'bullmq'
-import { scrapeName, scrapeDate, scrapeImages, getScript, scrapePostText, scrapeReactions, scrapeTimeStamp, scrapePostAllAtOnce} from './scrape'
+import { detect, detectAll, supportedLanguages, langName, toISO3 } from 'tinyld/heavy'
+// import {langName} from 'tinyld'
+import { scrapeName, scrapeDate, scrapeImages, getScript, scrapePostText, scrapeReactions, scrapeTimeStamp, scrapePostAllAtOnce, scrapeComments, topLangs} from './scrape'
+require('dotenv').config()
 
 // Create a single supabase client for interacting with your database
 const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL;
@@ -38,12 +42,12 @@ interface Reactions
 app.use('/*', cors())
 app.use(logger())
 // Authenticate with a bearer token
-// app.use(
-//   '/*',
-//   jwt({
-//     secret: JWT_SECRET,
-//   })
-// )
+app.use(
+  '/*',
+  jwt({
+    secret: JWT_SECRET,
+  })
+)
 // Setup SSE headers
 // app.use('/sse', async (c, next) => {
 //   c.header('Content-Type', 'text/event-stream');
@@ -77,7 +81,8 @@ app.get('/scrape', async (c) => {
 
 app.get('/', async (c) =>
    {
-  const TESTURL = "https://www.facebook.com/NintendoAmerica/posts/pfbid02XR9TzVnLaaREeDewGsfzQEB4UZYa354zobqx6rNyYqiP2Gvaquc6HTWYrw3sDR5fl"
+  // const TESTURL = "https://www.facebook.com/NintendoAmerica/posts/pfbid02XR9TzVnLaaREeDewGsfzQEB4UZYa354zobqx6rNyYqiP2Gvaquc6HTWYrw3sDR5fl"
+  let TESTURL = "https://www.facebook.com/permalink.php?story_fbid=pfbid0gkrT6tMBuAgSLyAQ9p7ugtKUBCoiH7Qq5QixbDvujLn3Rh24MCvd1cFJ8mfq3DeGl&id=100086144741635"
   let scriptText = getScript(TESTURL);
   const promises =  
   {
@@ -161,15 +166,28 @@ app.get('/sse', async (c) => {
   })
 })
 
-app.get('/getPost/:url', async (c) => {
-  let URL: string = c.req.param('url')
+//Regex and langdetecton times are <5ms 99% of time spent on await browser
+app.get('/getPost', async (c) => {
+  console.time('getPost');
+  let URL: string | undefined = c.req.header('post-URL');
   //URL VALIDATOR HERE
+  if (!URL) {
+    throw new HTTPException(400, { message: 'Bad URL parameter.' })
+  }
+
   let res = await scrapePostAllAtOnce(URL);
+
+  let totalText: string[] | null = Array.isArray(res.postText) ? res.postText : null;
+  res.langs = totalText ? topLangs(totalText.join(' '), 3) : [];
+  console.timeEnd('getPost');
   return c.json(res);
 });
 
 
-
+app.get('/comments', async (c) => {
+  const s = await (Bun.file("output.html").text());
+  return c.json(scrapeComments(s, 100));
+});
 
 
 export default { 

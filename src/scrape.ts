@@ -1,8 +1,8 @@
-import { chromium } from 'playwright-extra'
-import StealthPlugin from 'puppeteer-extra-plugin-stealth'
-import { Browser, ElementHandle, Page } from 'playwright';
-import { HTTPException } from 'hono/http-exception'
-
+import { chromium } from 'playwright-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { Browser, ElementHandle, Locator, Page } from 'playwright';
+import {detectAll, supportedLanguages, langName, toISO3 } from 'tinyld/heavy'
+import { HTTPException } from 'hono/http-exception';
 
 interface gotoOptions {
   referer?: string;
@@ -10,7 +10,7 @@ interface gotoOptions {
   waitUntil?: "load" | "domcontentloaded" | "networkidle" | "commit";
 }
 
-const gotoOptions: gotoOptions = { timeout: 10000, waitUntil: 'load' }
+const gotoOptions: gotoOptions = { timeout: 4000, waitUntil: 'load' }
 
 export async function scrapeName(url: string): Promise<string | null>
 {
@@ -195,13 +195,14 @@ export async function getScript(url: string): Promise<string[] | null>
     }
     scriptText = await largestDataContentLen[0]?.textContent();
     // console.log(scriptText)
-    // const text = await scriptHandle.evaluate((node) => node.textContent);
-    // if (text) {
-    //   scriptTexts.push(text);
-    //   txt+=(text+"\n");
-    // }
+    const text = await scriptHandle.evaluate((node) => node.textContent);
+    if (text) {
+      scriptTexts.push(text);
+      txt+=(text+"\n");
+    }
   }
   // Bun.write("output.html", await page.content() ? await page.content() : "");
+  Bun.write("output.html", txt);
   if (scriptText)
   {
     scriptTexts.push(scriptText);
@@ -335,32 +336,97 @@ async function scrapeScriptTextWithBrowser(page: Page): Promise<string[] | null>
   let txt = "";
   let scriptText = null;
 
-  let largestDataContentLen: [(null | ElementHandle), number] = [null, 0];
-  for (const scriptHandle of scriptElementHandles) {
-    let dataContentLen = await scriptHandle.getAttribute("data-content-len");
-    if (dataContentLen &&  parseInt(dataContentLen) > largestDataContentLen[1])
-    {
-      largestDataContentLen[0] = scriptHandle;
-      largestDataContentLen[1] = parseInt(dataContentLen);
-    }
-    scriptText = await largestDataContentLen[0]?.textContent();
-    // console.log(scriptText)
-    // const text = await scriptHandle.evaluate((node) => node.textContent);
-    // if (text) {
-    //   scriptTexts.push(text);
-    //   txt+=(text+"\n");
-    // }
-  }
-  // Bun.write("output.html", await page.content() ? await page.content() : "");
-  if (scriptText)
+  // let largestDataContentLen: [(null | ElementHandle), number] = [null, 0];
+  // for (const scriptHandle of scriptElementHandles) {
+  //   let dataContentLen = await scriptHandle.getAttribute("data-content-len");
+  //   if (dataContentLen &&  parseInt(dataContentLen) > largestDataContentLen[1])
+  //   {
+  //     largestDataContentLen[0] = scriptHandle;
+  //     largestDataContentLen[1] = parseInt(dataContentLen);
+  //   }
+  //   scriptText = await largestDataContentLen[0]?.textContent();
+  // }
+  async function tryContentOrAttribute(scriptLocator: Locator, nTimes: number, method: 'content' | 'attribute',  timeout? : number): Promise<string | null>
   {
-    scriptTexts.push(scriptText);
+    timeout = timeout ? timeout : 500;
+    while(nTimes > 0)
+    {
+      try
+      {
+        if(method === 'content')
+        {
+          return await scriptLocator.textContent();
+        }
+        else if(method === 'attribute')
+        {
+          return await scriptLocator.getAttribute("data-content-len");
+        }
+      }
+      catch(error)
+      {
+        console.log("retried")
+        nTimes--;
+      }
+    }
+    return null;
   }
+  let scriptLocators = await page.locator('script').all();
+  let maxContentLen: [string, number] = ["", 0];
+  for (const scriptLocator of scriptLocators)
+  {
+    let contentLen = null;
+
+    contentLen = await tryContentOrAttribute(scriptLocator, 3, 'attribute', 300);
+    if(contentLen)
+    {
+      let dataLen = parseInt(contentLen)
+      if (dataLen > maxContentLen[1])
+      {
+        let attrib = await tryContentOrAttribute(scriptLocator, 3, 'content', 300);
+        if(!attrib)
+        {
+          throw new HTTPException(500, { message: 'Failed to get content' });
+        }
+        maxContentLen[0] = attrib;
+        maxContentLen[1] = dataLen;
+      }
+    }
+  }
+
+
+  // Bun.write("output.html", await page.content() ? await page.content() : "");
+  if (maxContentLen[0] === "")
+  {
+    return null
+  }
+  scriptTexts.push(maxContentLen[0]);
   return scriptTexts;
+}
+
+export function scrapeComments(scriptString: string, topNComments? : number): string[]
+{
+  const commentRegex = /"text":"((?:[^"\\]|\\.)*)","ranges"/g;
+  const matches: RegExpExecArray[]  = Array.from(scriptString.matchAll(commentRegex));
+  let res: string[] = [];
+  if (!topNComments)
+  {
+    topNComments = matches.length;
+  }
+  while(matches.length > 0 && topNComments > 0)
+  {
+    const shiftedMatch = matches.shift()?.[1];
+    if (shiftedMatch !== undefined)
+    {
+      // console.log(shiftedMatch.replace(/\\"/g, '"'));
+      res.push(shiftedMatch.replace(/\\"/g, '"'));
+    }
+  }
+  return res;
 }
 
 export async function scrapePostAllAtOnce(url: string)
 {
+  console.time("Scrape Time");
   let retries = 0;
   let [page, browser]: [(Page | null), (Browser | null)] = [null, null];
   while(retries < 3 && (!page && !browser))
@@ -379,14 +445,17 @@ export async function scrapePostAllAtOnce(url: string)
   {
     throw new Error("Failed to initialize browser");
   }
-  const scriptText = scrapeScriptTextWithBrowser(page);
+  const scriptText = await scrapeScriptTextWithBrowser(page);
   const promises =  
   {
     name: scrapeNameWithBrowser(page),
     postText: scrapePostTextWithBrowser(page),
     images: scrapeImageWithBrowser(page),
+    // scriptText: scriptText,
   };
-  let resultMap = new Map<string, string | null | string[] | number | Reactions>()
+  let resultMap = new Map<string, string | null | string[] | number | Reactions>();
+  console.timeEnd("Scrape Time");
+
   await Promise.allSettled(Object.values(promises))
   .then(async (results) => {
     Object.keys(promises).forEach((key, index) => {
@@ -403,14 +472,16 @@ export async function scrapePostAllAtOnce(url: string)
     let noRejections: boolean = results.every((res) => res.status == 'fulfilled')
     if(!noRejections)
     {
+      console.error(JSON.stringify(Object.fromEntries(resultMap)))
       throw new HTTPException(500, { message: 'Scraping failed' })
     }
   });
-
-  let sc = await scriptText;
+  // resultMap.set('scriptText', scriptText);
+  let sc = scriptText;
   if (sc)
   {
     let reactions: Reactions = scrapeReactionsbyString(sc[0]);
+    let comments: string[] = scrapeComments(sc[0]);
     let timestamp = null;
     if (sc.length >= 1) {
       timestamp = scrapeTimeStamp(sc[0]);
@@ -423,7 +494,23 @@ export async function scrapePostAllAtOnce(url: string)
     if (timestamp) {
       resultMap.set('timestamp', timestamp);
     }
+    if (comments) {
+      resultMap.set('comments', comments);
+    }
   }
-
+  await browser.close();
+  // resultMap.delete('scriptText');
   return (Object.fromEntries(resultMap));
+}
+
+export function topLangs(text: string, topN: number): string[]
+{
+  let detected:{lang: string; accuracy: number;}[] = detectAll(text);
+  let topLangs: string[] = [];
+  detected = detected.filter((lang) => lang.accuracy >= 0.5);
+  for (const lang of detected)
+  {
+    topLangs.push(langName(toISO3(lang.lang)));
+  }
+  return topLangs.slice(0, topN);
 }
