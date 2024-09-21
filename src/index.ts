@@ -2,12 +2,12 @@ import { Hono } from 'hono'
 import { serve } from '@hono/node-server'
 import { decode, jwt, sign, verify } from 'hono/jwt'
 import { cors } from 'hono/cors'
-import { createClient } from '@supabase/supabase-js'
+// import { createClient } from '@supabase/supabase-js'
 import type { JwtVariables } from 'hono/jwt'
 import {streamSSE } from 'hono/streaming'
 import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
-import { Queue, Worker } from 'bullmq'
+// import { Queue, Worker } from 'bullmq'
 import { detect, detectAll, supportedLanguages, langName, toISO3 } from 'tinyld/heavy'
 // import {langName} from 'tinyld'
 import { scrapeName, scrapeDate, scrapeImages, getScript, scrapePostText, scrapeReactions, scrapeTimeStamp, scrapePostAllAtOnce, scrapeComments, topLangs} from './scrape'
@@ -20,7 +20,7 @@ const JWT_SECRET = process.env.SUPABASE_JWT_SECRET;
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !JWT_SECRET) {
   throw new Error('Missing env key')
 }
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+// const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 type Variables = JwtVariables
 
 const app = new Hono<{ Variables: Variables }>()
@@ -185,12 +185,17 @@ app.get('/getPost', async (c) => {
 
 
 app.get('/comments', async (c) => {
-  const s = await (Bun.file("output.html").text());
-  return c.json(scrapeComments(s, 100));
+  // const s = await (Bun.file("output.html").text());
+  // return c.json(scrapeComments(s, 100));
 });
 
 
-export default { 
-  port: 3000, 
-  fetch: app.fetch, 
-} 
+// export default { 
+//   port: 3000, 
+//   fetch: app.fetch, 
+// } 
+
+serve({
+  fetch: app.fetch,
+  port: 3000
+})

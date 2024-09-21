@@ -202,7 +202,7 @@ export async function getScript(url: string): Promise<string[] | null>
     }
   }
   // Bun.write("output.html", await page.content() ? await page.content() : "");
-  Bun.write("output.html", txt);
+  // Bun.write("output.html", txt);
   if (scriptText)
   {
     scriptTexts.push(scriptText);
