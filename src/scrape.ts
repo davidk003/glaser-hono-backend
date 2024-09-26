@@ -3,7 +3,7 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { Browser, ElementHandle, Locator, Page } from 'playwright';
 import {detectAll, supportedLanguages, langName, toISO3 } from 'tinyld/heavy'
 import { HTTPException } from 'hono/http-exception';
-
+const fs = require('node:fs');
 interface gotoOptions {
   referer?: string;
   timeout?: number;
@@ -178,6 +178,9 @@ export async function getScript(url: string): Promise<string[] | null>
   let startTime = Date.now();
   await page.goto(url, gotoOptions);
   console.log(`Script goto took: ${Date.now() - startTime}ms`);
+  
+  // const content = await page.content();
+  // fs.writeFileSync("output.html", content ? content : "");
 
   const scriptElementHandles = await page.$$("script");
   const scriptTexts: string[] = [];
@@ -393,8 +396,6 @@ async function scrapeScriptTextWithBrowser(page: Page): Promise<string[] | null>
     }
   }
 
-
-  // Bun.write("output.html", await page.content() ? await page.content() : "");
   if (maxContentLen[0] === "")
   {
     return null

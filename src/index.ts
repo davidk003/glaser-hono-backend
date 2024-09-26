@@ -8,10 +8,9 @@ import {streamSSE } from 'hono/streaming'
 import { logger } from 'hono/logger'
 import { HTTPException } from 'hono/http-exception'
 // import { Queue, Worker } from 'bullmq'
-import { detect, detectAll, supportedLanguages, langName, toISO3 } from 'tinyld/heavy'
-// import {langName} from 'tinyld'
 import { scrapeName, scrapeDate, scrapeImages, getScript, scrapePostText, scrapeReactions, scrapeTimeStamp, scrapePostAllAtOnce, scrapeComments, topLangs} from './scrape'
 require('dotenv').config()
+
 
 // Create a single supabase client for interacting with your database
 const SUPABASE_URL = process.env.PUBLIC_SUPABASE_URL;
@@ -48,13 +47,6 @@ app.use(
     secret: JWT_SECRET,
   })
 )
-// Setup SSE headers
-// app.use('/sse', async (c, next) => {
-//   c.header('Content-Type', 'text/event-stream');
-//   c.header('Cache-Control', 'no-cache');
-//   c.header('Connection', 'keep-alive');
-//   await next();
-// });
 
 // Flow for scraping:
 // 1. User sends a input to scrape
@@ -185,15 +177,12 @@ app.get('/getPost', async (c) => {
 
 
 app.get('/comments', async (c) => {
-  // const s = await (Bun.file("output.html").text());
+  await getScript("https://www.facebook.com/NintendoAmerica/posts/pfbid02XR9TzVnLaaREeDewGsfzQEB4UZYa354zobqx6rNyYqiP2Gvaquc6HTWYrw3sDR5fl");
+  // fs.("output.html").write(await getScript("https://www.facebook.com/NintendoAmerica/posts/pfbid02XR9TzVnLaaREeDewGsfzQEB4UZYa354zobqx6rNyYqiP2Gvaquc6HTWYrw3sDR5fl"));
+  // const s = await (fs.file("output.html").text());
   // return c.json(scrapeComments(s, 100));
 });
 
-
-// export default { 
-//   port: 3000, 
-//   fetch: app.fetch, 
-// } 
 
 serve({
   fetch: app.fetch,
